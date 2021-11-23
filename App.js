@@ -6,8 +6,8 @@
  * @flow strict-local
  */
 
-import React from 'react';
-import type {Node} from 'react';
+import React, { useEffect, useState } from 'react';
+
 import {
   Alert,
   Button,
@@ -49,51 +49,93 @@ import { Icon } from 'react-native-elements'
 // For MQTT Protocol
 import MQTT from 'sp-react-native-mqtt';
 
-var d_client;
-var d_on_message;
+let d_client;
+var idofusers = new Set()
 
 MQTT.createClient({
   uri: 'mqtt://74.208.35.55:1883',
   clientId: 'from_android'
 }).then(function(client) {
-    
-    client.on('closed', function() {
-      console.log('mqtt.event.closed');
-    });
-  
-    client.on('error', function(msg) {
-      console.log('mqtt.event.error', msg);
-    });
-  
-    client.on('message', function(msg) {
-      d_on_message(msg)
-    });
-  
-    client.on('connect', function() {
-      console.log('connected');
-      // client.subscribe('ahsefati_1/#', 0);
-      client.subscribe('brokers/#', 0);
-
-     
-      // client.publish('/data', "test", 0, false);
-    });
-
-
-    client.connect();
-    d_client = client
-  }).catch(function(err){
-    console.log(err);
+  console.log(client)
+  d_client = client
+  // setMyclient(client)
+  client.on('closed', function () {
+    console.log('mqtt.event.closed');
   });
 
-  const d_subscribe = (idofme) => {
-    d_client.subscribe(idofme + "/#",0)
-    Alert.alert("Success!" + idofme)
+  client.on('error', function(msg) {
+    console.log('mqtt.event.error', msg);
+  });
+
+  client.on('message', function(msg) {
+    d_on_message(msg)
+  });
+
+  client.on('connect', function() {
+    console.log('connected');
+    // client.subscribe('ahsefati_1/#', 0);
+    client.subscribe('brokers/#', 0);
+    // client.publish('/data', "test", 0, false);
+  });
+
+    
+  client.connect();
+    
+}).catch(function(err){
+    console.log(err);
+
+});
+
+const d_subscribe_general = (client) => {
+  AsyncStorage.getItem("idofme").then(
+    value => {
+      if (value!=null){
+        client.subscribe(value+"/#", 0)
+        client.publish("users/" + value, value, 0, true)
+      }
+    }
+  )
+}
+
+const d_subscribe = (client, topic) => {
+  client.subscribe(topic, 0)
+}
+
+const d_publish = (client, topic, msg, retain) => {
+  client.publish(topic, msg, 0, retain)
+}
+
+const d_on_message = (msg) => {
+  if ("users/" === msg["topic"].substring(0,6)){
+      idofusers.add(msg["data"])
+  } else {
+
+    var idofuser = msg.topic.split("/")[1]
+    AsyncStorage.getItem(idofuser).then(
+      value => {
+        if (value!=null){
+          var newValue = value + msg.data + "/!!/"
+          AsyncStorage.setItem(idofuser,newValue)
+          console.log(newValue)
+        }else{
+          var newValue = msg.data + "/!!/"
+          AsyncStorage.setItem(idofuser,newValue)
+        }
+      }
+    )
+
+    console.log(msg.data)
+    
   }
 
-  const d_publish = (idofme, idtopublish, msgtopublish)=> {
-    d_client.publish(idtopublish+ "/" + idofme, msgtopublish, 0, false)
-    console.log("SENT!")
-  }
+}
+
+
+
+// const d_publish = (idofme, idtopublish, msgtopublish)=> {
+//   d_client.publish(idtopublish+ "/" + idofme, msgtopublish, 0, false)
+//   console.log("SENT!")
+// }
 
 
 const CartOfMsg = ({navigation,title, lastmsg}) => {
@@ -110,11 +152,18 @@ const CartOfMsg = ({navigation,title, lastmsg}) => {
 };
 
 const CartOfAddFriend = ({navigation, title}) => {
+
+  const navigateToSpecialPrivatePage = ()=>{
+    console.log(title)
+    navigation.navigate('Private', {title:title})
+  }
+
+
   return (
     <SafeAreaView style={{flexDirection: 'row', backgroundColor:'white', padding:10, margin:5, borderRadius:10, borderColor:'black', borderWidth:1}}>
       <Icon style={{marginLeft:10}} size={50} type='font-awesome' name="telegram"/>
       <View>
-        <Text onPress={() => navigation.navigate('Private',)} style={{marginLeft:20, marginTop:'7%', fontSize:20, color:'black', fontWeight:'bold'}}>{title}</Text>
+        <Text onPress={() => navigateToSpecialPrivatePage()} style={{marginLeft:20, marginTop:'7%', fontSize:20, color:'black', fontWeight:'bold'}}>{title}</Text>
       </View>
       
       
@@ -170,20 +219,73 @@ const SignupScreen = ({ navigation }) => {
   );
 };
 
-const PrivateScreen = ({navigation}) => {
+const PrivateScreen = ({navigation, route}) => {
+  
+  const [ userMsg, setuserMsg] = React.useState("")
+  const [user_messages,setuser_messages] = React.useState([])
+  const [idofme, setidofme] = React.useState("")
+
   const msgsviewref = React.useRef(null)
+  
+  const sendMsgToUser = ()=>{
+    AsyncStorage.getItem("idofme").then(
+      value => {
+        if (value!=null){
+          setidofme(value)
+          d_publish(d_client, route.params.title+"/"+idofme , userMsg , false)
+          d_publish(d_client, idofme+"/"+route.params.title , userMsg , false)
+          AsyncStorage.getItem(route.params.title).then(
+            value => {
+              if (value!=null){
+                value = value + "*::*" + userMsg + "/!!/"
+                AsyncStorage.setItem(route.params.title,value)          
+      
+              }else{
+                value = "*::*" + userMsg + "/!!/"
+                AsyncStorage.setItem(route.params.title,value) 
+              }
+            }
+          )
+
+        }
+      }
+    )
+  }
+
 
   React.useEffect(()=>{
 
-    msgsviewref.current.scrollToEnd()
+    // msgsviewref.current.scrollToEnd()
 
-  },[])
+    AsyncStorage.getItem(route.params.title).then(
+      value => {
+        if (value!=null){
+          // console.log(value)
+          value = value.split("/!!/")
+          value.pop()
+          // console.log(user_messages
+          setuser_messages(value)
 
+        }
+      }
+    )
+
+  },[user_messages])
+  
+  const textsOfUser = (user_messages.length) ? user_messages.map((item, key)=>{
+    return(
+      <Text style={(item.includes("*::*"))?styles.meassenderchatview:styles.measrecieverchatview}>{(item.includes("*::*"))? item.substring(4,item.length):item}</Text>
+    )
+  }
+  ): <Text>No Data is available</Text>
+  
+  navigation.setOptions({ title: route.params.title })
   return(
     <SafeAreaView style={{backgroundColor:'gray'}}>
       <KeyboardAvoidingView behavior="position">
         <ScrollView ref={msgsviewref} style={{height:'88%', margin:3, marginBottom:0, width:'98%'}}>
-          <Text style={styles.meassenderchatview}>Hello Amirhossein, how you doin?</Text>
+          
+          {/* <Text style={styles.meassenderchatview}>Hello Amirhossein, how you doin?</Text>
           <Text style={styles.measrecieverchatview}>Hey, fine. Are you ready? I'll be there 10 mins later bro!</Text>
           <Text style={styles.measrecieverchatview}>Looooooooooooong MSG Looooooooooooong MSG Looooooooooooong MSG Looooooooooooong MSG Looooooooooooong MSG Looooooooooooong MSG Looooooooooooong MSG Looooooooooooong MSG</Text>
           <Text style={styles.measrecieverchatview}>I'm really good at this, no? I can fix this after I chartreg kjs ksd nnjksdfklml lwhfjkhwjk lwkefjk hsmfkwnek;f wl</Text>
@@ -193,14 +295,22 @@ const PrivateScreen = ({navigation}) => {
           <Text style={styles.measrecieverchatview}>Looooooooooooong MSG Looooooooooooong MSG Looooooooooooong MSG Looooooooooooong MSG Looooooooooooong MSG Looooooooooooong MSG Looooooooooooong MSG Looooooooooooong MSG</Text>
           <Text style={styles.meassenderchatview}>Yes you are using your past experience very well! that's great! you can bro! sjkdfsd kjhsdf hgfdjh jhkh sdjfhkknjsdfk jksd</Text>
           <Text style={styles.meassenderchatview}>Yes you are using your past experience very well! that's great! you can bro! sjkdfsd kjhsdf hgfdjh jhkh sdjfhkknjsdfk jksd</Text>
+          <Text></Text> */}
+
+          
+          {textsOfUser}
+
           <Text></Text>
+          
+
+
         </ScrollView>
-        
+
         <View style={{flexDirection:'row', justifyContent:'space-between', marginTop:10, height:'12%'}}>
           <View style={styles.inputChat}>
-            <TextInput style={{fontSize:16, fontWeight:'bold'}} placeholder="Your message..." multiline={true}/>
+            <TextInput style={{fontSize:16, fontWeight:'bold'}} placeholder="Your message..." value={userMsg} onChangeText={newvalue => setuserMsg(newvalue)} multiline={true}/>
           </View>
-          <Icon style={{marginLeft: '88%',}} size={40} type='font-awesome' name="telegram"/>
+          <Icon style={{marginLeft: '88%',}} size={40} onPress={()=>sendMsgToUser(userMsg)} type='font-awesome' name="telegram"/>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -211,6 +321,7 @@ const PrivateScreen = ({navigation}) => {
 const HomeScreen = ({ navigation, route }) => {
   const [idofme, setidofme] = React.useState("")
 
+  d_subscribe_general(d_client)
 
   React.useEffect(()=>{
     fetchIdOfMe()
@@ -228,7 +339,11 @@ const HomeScreen = ({ navigation, route }) => {
     }
   }
 
+  
+
   const [idtosearch, setidtosearch] = React.useState("Search here..")
+
+
 
   return(
     <SafeAreaView>
@@ -240,14 +355,13 @@ const HomeScreen = ({ navigation, route }) => {
 
       <View style={{flexDirection: 'row', justifyContent: 'space-between',}}>
         <Text style={styles.HelloHeader}>Messages</Text>
-        <Icon raised name='plus' type='font-awesome' color='black' onPress={() => navigation.navigate('Find Friends',) } />
+        <Icon raised name='plus' type='font-awesome' color='black' onPress={() => navigation.navigate('Find Friends', ) } />
       </View>
 
       <View>
         <CartOfMsg navigation={navigation} title="Amirhossein" lastmsg="Hey How you doing today?"/>
         
       </View>
-
       
       </ScrollView>
     </SafeAreaView>
@@ -256,6 +370,34 @@ const HomeScreen = ({ navigation, route }) => {
 
 const FindFriendsScreen = ({navigation, route}) => {
   const [idoffriend, setidoffriend] = React.useState("")
+  // const [usersData, setUsersData] = React.useState([])
+  
+  
+  const idofusersArray1 = Array.from(idofusers)
+  d_subscribe(d_client, "users/#");
+  
+  const [idofusersArray, setidofusersArray] = React.useState([])
+  
+
+  useEffect(()=>{
+    setidofusersArray(idofusersArray1)
+
+  },idofusersArray)
+  
+  
+  const usersData = (
+    (idofusersArray.length) ? idofusersArray.map((item, key)=>
+    
+      {
+      return(   <CartOfAddFriend navigation={navigation} key={key} title={ item }/> )
+      }  
+      
+    ) 
+      : <Text style={{color:'black', textAlign:'center', fontWeight:'bold'}}>No Data</Text>
+  ) 
+  
+  
+  
 
   return(
     <SafeAreaView>
@@ -263,10 +405,9 @@ const FindFriendsScreen = ({navigation, route}) => {
       <TextInput placeholder="Put ID Here" style={styles.input} value={idoffriend} onChangeText={newvalue => setidoffriend(newvalue)}/>
 
       <ScrollView>
-        <CartOfAddFriend navigation={navigation} title="Amirhossein"/>
-        <CartOfAddFriend navigation={navigation} title="Amirmahdi"/>
-        
-        
+        {/* <CartOfAddFriend navigation={navigation} title="Amirhossein"/>
+        <CartOfAddFriend navigation={navigation} title="Amirmahdi"/> */}
+        { usersData }
       </ScrollView>
 
     </SafeAreaView>
@@ -321,33 +462,7 @@ const SettingScreen = ({navigation, route}) => {
 }
 
 
-const Section = ({children, title}): Node => {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
-  );
-};
-
-const App: () => Node = () => {
+const App = () => {
   const isDarkMode = useColorScheme() === 'dark';
 
   const backgroundStyle = {
@@ -355,33 +470,6 @@ const App: () => Node = () => {
   };
 
   return (
-    // <SafeAreaView style={backgroundStyle}>
-    //   <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-    //   <ScrollView
-    //     contentInsetAdjustmentBehavior="automatic"
-    //     style={backgroundStyle}>
-    //     <Header />
-    //     <View
-    //       style={{
-    //         backgroundColor: isDarkMode ? Colors.black : Colors.white,
-    //       }}>
-    //       <Section title="Step One">
-    //         Edit <Text style={styles.highlight}>App.js</Text> to change this
-    //         screen and then come back to see your edits.
-    //       </Section>
-    //       <Section title="See Your Changes">
-    //         <ReloadInstructions />
-    //       </Section>
-    //       <Section title="Debug">
-    //         <DebugInstructions />
-    //       </Section>
-    //       <Section title="Learn More">
-    //         Read the docs to discover what to do next:
-    //       </Section>
-    //       <LearnMoreLinks />
-    //     </View>
-    //   </ScrollView>
-    // </SafeAreaView>
     <NavigationContainer >
       <Stack.Navigator>
         <Stack.Screen
