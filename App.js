@@ -264,7 +264,7 @@ const FindFriendsScreen = ({navigation, route}) => {
 
       <ScrollView>
         <CartOfAddFriend navigation={navigation} title="Amirhossein"/>
-        <CartOfAddFriend navigation={navigation} title="Amirmahdy"/>
+        <CartOfAddFriend navigation={navigation} title="Amirmahdi"/>
         
         
       </ScrollView>
