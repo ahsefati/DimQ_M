@@ -52,39 +52,45 @@ import MQTT from 'sp-react-native-mqtt';
 let d_client;
 var idofusers = new Set()
 
-MQTT.createClient({
-  uri: 'mqtt://74.208.35.55:1883',
-  clientId: 'from_android'
-}).then(function(client) {
-  console.log(client)
-  d_client = client
-  // setMyclient(client)
-  client.on('closed', function () {
-    console.log('mqtt.event.closed');
+const connect_to_dimq = (address, port) => {
+  var full_address = 'mqtt://' + address + ":" + port
+  MQTT.createClient({
+    uri: full_address,
+    clientId: 'from_android'
+  }).then(function(client) {
+    console.log(client)
+    d_client = client
+    // setMyclient(client)
+    client.on('closed', function () {
+      console.log('mqtt.event.closed');
+    });
+  
+    client.on('error', function(msg) {
+      console.log('mqtt.event.error', msg);
+    });
+  
+    client.on('message', function(msg) {
+      d_on_message(msg)
+    });
+  
+    client.on('connect', function() {
+      console.log('connected');
+      // client.subscribe('ahsefati_1/#', 0);
+      client.subscribe('brokers/#', 0);
+      // client.publish('/data', "test", 0, false);
+    });
+  
+      
+    client.connect();
+      
+  }).catch(function(err){
+      console.log(err);
+  
   });
+}
 
-  client.on('error', function(msg) {
-    console.log('mqtt.event.error', msg);
-  });
-
-  client.on('message', function(msg) {
-    d_on_message(msg)
-  });
-
-  client.on('connect', function() {
-    console.log('connected');
-    // client.subscribe('ahsefati_1/#', 0);
-    client.subscribe('brokers/#', 0);
-    // client.publish('/data', "test", 0, false);
-  });
-
-    
-  client.connect();
-    
-}).catch(function(err){
-    console.log(err);
-
-});
+connect_to_dimq("172.17.0.1", "1883")
+connect_to_dimq("koochap.com","1883")
 
 const d_subscribe_general = (client) => {
   AsyncStorage.getItem("idofme").then(
@@ -563,7 +569,7 @@ const styles = StyleSheet.create({
   },
   measrecieverchatview:{
     alignSelf:'flex-start',
-    fontSize:16,
+    fontSize:20,
     margin:10,
     marginLeft:5,
     color:'black',
