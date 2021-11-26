@@ -52,6 +52,11 @@ import MQTT from 'sp-react-native-mqtt';
 let d_client;
 var idofusers = new Set()
 
+
+const connect_automatically = () => {
+
+}
+
 const connect_to_dimq = (address, port) => {
   var full_address = 'mqtt://' + address + ":" + port
   MQTT.createClient({
@@ -67,6 +72,7 @@ const connect_to_dimq = (address, port) => {
   
     client.on('error', function(msg) {
       console.log('mqtt.event.error', msg);
+      connect_automatically()
     });
   
     client.on('message', function(msg) {
@@ -74,6 +80,7 @@ const connect_to_dimq = (address, port) => {
     });
   
     client.on('connect', function() {
+      ToastAndroid.show("DimQ Connected!", ToastAndroid.SHORT)
       console.log('connected');
       // client.subscribe('ahsefati_1/#', 0);
       client.subscribe('brokers/#', 0);
@@ -89,8 +96,8 @@ const connect_to_dimq = (address, port) => {
   });
 }
 
-connect_to_dimq("172.17.0.1", "1883")
-connect_to_dimq("koochap.com","1883")
+connect_to_dimq("192.168.0.79", "1883")
+// connect_to_dimq("koochap.com","1883")
 
 const d_subscribe_general = (client) => {
   AsyncStorage.getItem("idofme").then(
@@ -429,6 +436,11 @@ const SettingScreen = ({navigation, route}) => {
 
   const [idofme, setidofme] = React.useState("")
 
+  const connectManualToDimQ = () => {
+    ToastAndroid.show("Connecting...", ToastAndroid.SHORT)
+    connect_to_dimq(manualbrokerip, manualbrokerport)
+  }
+
 
   React.useEffect(()=>{
     fetchIdOfMe()
@@ -453,7 +465,7 @@ const SettingScreen = ({navigation, route}) => {
       <Text style={{margin:'2%', marginLeft:'20%', marginBottom:0, fontSize:15,color:'black' }}>Broker Port:</Text>
       <TextInput style={styles.brokersettinginput} maxLength={5} keyboardType="numeric" value={manualbrokerport} onChangeText={newvalue=>{setmanualbrokerport(newvalue)}} />
       <View style={{width:'60%', alignSelf:'center', marginTop:30}}>
-        <Button title="Connect Manually"/>
+        <Button onPress={() => connectManualToDimQ()} title="Connect Manually"/>
       </View>
       <View style={{width:'60%', alignSelf:'center', marginTop:10,}}>
         <Button color="#841584" title="Instead: Connect Auto"/>
