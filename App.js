@@ -51,17 +51,42 @@ import MQTT from 'sp-react-native-mqtt';
 
 let d_client;
 var idofusers = new Set()
+var brokersIP = new Set()
+var connected = 0
 
+// For sleep (wait) behavior (For Auto-Connect functionality)
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 const connect_automatically = () => {
-
+  console.log(brokersIP)
+  console.log(brokersIP.size)
+  for (let ip of brokersIP.values()){
+    console.log(ip)
+    connect_to_dimq(ip,"1883")
+    sleep(2000)
+    if (connected){
+      AsyncStorage.getItem("idofme").then(
+        value => {
+          if (value!=null){
+            client.subscribe(value+"/#", 0)
+            console.log("I am still alive!:: " + value )
+            client.publish("users/" + value, value, 0, true)
+          }
+        }
+      )
+      break
+    }
+  }
 }
 
 const connect_to_dimq = (address, port) => {
   var full_address = 'mqtt://' + address + ":" + port
+  let clientIDRnd = (Math.random() + 1).toString(36).substring(7);
   MQTT.createClient({
     uri: full_address,
-    clientId: 'from_android'
+    clientId: 'from_app_' + clientIDRnd
   }).then(function(client) {
     console.log(client)
     d_client = client
@@ -72,16 +97,21 @@ const connect_to_dimq = (address, port) => {
   
     client.on('error', function(msg) {
       console.log('mqtt.event.error', msg);
+      ToastAndroid.show("Connection Lost!", ToastAndroid.SHORT)
+      ToastAndroid.show("Searching for brokers automatically...", ToastAndroid.SHORT)
       connect_automatically()
+      
     });
   
     client.on('message', function(msg) {
+      console.log(msg["data"])
       d_on_message(msg)
     });
   
     client.on('connect', function() {
       ToastAndroid.show("DimQ Connected!", ToastAndroid.SHORT)
       console.log('connected');
+      connected = 1;
       // client.subscribe('ahsefati_1/#', 0);
       client.subscribe('brokers/#', 0);
       // client.publish('/data', "test", 0, false);
@@ -96,7 +126,7 @@ const connect_to_dimq = (address, port) => {
   });
 }
 
-connect_to_dimq("192.168.0.79", "1883")
+connect_to_dimq("192.168.0.79", "1884")
 // connect_to_dimq("koochap.com","1883")
 
 const d_subscribe_general = (client) => {
@@ -119,8 +149,12 @@ const d_publish = (client, topic, msg, retain) => {
 }
 
 const d_on_message = (msg) => {
+  console.log("------------------------\t\t" + msg["topic"].substring(0,8))
   if ("users/" === msg["topic"].substring(0,6)){
       idofusers.add(msg["data"])
+  } else if ("brokers/" === msg["topic"].substring(0,8)){
+      console.log(msg["data"] + " Added to brokers")
+      brokersIP.add(msg["data"])
   } else {
 
     var idofuser = msg.topic.split("/")[1]
@@ -136,8 +170,6 @@ const d_on_message = (msg) => {
         }
       }
     )
-
-    console.log(msg.data)
     
   }
 
