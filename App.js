@@ -64,20 +64,8 @@ const connect_automatically = () => {
   console.log(brokersIP.size)
   for (let ip of brokersIP.values()){
     console.log(ip)
-    connect_to_dimq(ip,"1883")
-    sleep(2000)
-    if (connected){
-      AsyncStorage.getItem("idofme").then(
-        value => {
-          if (value!=null){
-            client.subscribe(value+"/#", 0)
-            console.log("I am still alive!:: " + value )
-            client.publish("users/" + value, value, 0, true)
-          }
-        }
-      )
-      break
-    }
+    connect_to_dimq(ip,"1883");
+    sleep(2000);
   }
 }
 
@@ -104,15 +92,25 @@ const connect_to_dimq = (address, port) => {
     });
   
     client.on('message', function(msg) {
-      console.log(msg["data"])
       d_on_message(msg)
     });
   
     client.on('connect', function() {
-      ToastAndroid.show("DimQ Connected!", ToastAndroid.SHORT)
+      ToastAndroid.show("DimQ Connected to " + address, ToastAndroid.SHORT)
       console.log('connected');
       connected = 1;
       // client.subscribe('ahsefati_1/#', 0);
+      if (connected){
+        AsyncStorage.getItem("idofme").then(
+          value => {
+            if (value!=null){
+              client.subscribe(value+"/#", 0)
+              client.publish("users/" + value, value, 0, true)
+            }
+          }
+        )
+        
+      }
       client.subscribe('brokers/#', 0);
       // client.publish('/data', "test", 0, false);
     });
